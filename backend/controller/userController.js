@@ -134,7 +134,63 @@ const userRegister = async (req, res) => {
   }
 };
 
+const userLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({
+        message: "Please provide required feild",
+      });
+    }
 
+    const user = await User.findOne({ email });
+    if (!user || !user.password) {
+      return res.status(400).json({
+        message: "Invalid credentials.",
+      });
+    }
 
+    const isPasswordCorrect = await User.matchPassword(password);
+    if (!isPasswordCorrect) {
+      return res.status(400).json({
+        message: "Invalid password.",
+      });
+    }
+
+    const { refreshToken, accessToken } = await generateAccessAndRefreshToken(
+      user._id
+    );
+    const loggedInUser = await User.findById(user._id).select(
+      "-password -refreshToken"
+    );
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, cookieOptions)
+      .cookie("refreshToken", refreshToken, cookieOptions)
+      .json({
+        user: loggedInUser,
+      });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+const userLogout = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    if (userId) {
+      await User.findByIdAndUpdate(userId, { refreshToken: "" });
+    }
+
+    return res
+      .clearCookie("accessToken", cookieOptions)
+      .clearCookie("refreshToken", cookieOptions)
+      .json({ message: "Logged out successfully" });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Error while logging out" });
+  }
+};
 
 export { userRegister, refreshAccessToken };
