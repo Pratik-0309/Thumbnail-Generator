@@ -3,6 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import "dotenv/config";
 import connectDB from "./config/db.js";
+import userRouter from './routes/userRoute.js'
 
 const app = express();
 connectDB();
@@ -17,6 +18,8 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+app.use("/api/user",userRouter);
 
 app.get("/", (req, res) => {
   res.send("Hello World");
