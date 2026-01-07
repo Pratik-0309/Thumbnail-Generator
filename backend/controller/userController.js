@@ -1,6 +1,8 @@
 import User from "../models/UserModel.js";
 import jwt from "jsonwebtoken";
 
+const isProduction = process.env.NODE_ENV === "production";
+
 const cookieOptions = {
   httpOnly: true,
   secure: isProduction,
@@ -150,7 +152,7 @@ const userLogin = async (req, res) => {
       });
     }
 
-    const isPasswordCorrect = await User.matchPassword(password);
+    const isPasswordCorrect = await user.matchPassword(password);
     if (!isPasswordCorrect) {
       return res.status(400).json({
         message: "Invalid password.",
