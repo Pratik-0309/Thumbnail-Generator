@@ -193,4 +193,4 @@ const userLogout = async (req, res) => {
   }
 };
 
-export { userRegister, refreshAccessToken };
+export { userLogin, userLogout, userRegister, refreshAccessToken };
