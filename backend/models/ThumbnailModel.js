@@ -45,7 +45,7 @@ const thumbnailSchema = new mongoose.Schema(
       ],
     },
     text_overlay: {
-      type: boolean,
+      type: Boolean,
       default: false
     },
     image_url: {
@@ -59,7 +59,7 @@ const thumbnailSchema = new mongoose.Schema(
       type: String,
     },
     isGenerating: {
-      type: boolean,
+      type: Boolean,
       default: true
     },
   },
