@@ -200,7 +200,7 @@ const deleteThumbnail = async (req, res) => {
   }
 };
 
-const getUserController = async (req, res) => {
+const getUserThumnail = async (req, res) => {
   try {
     const userId = req.user._id;
     if (!userId) {
@@ -229,4 +229,4 @@ const getUserController = async (req, res) => {
   }
 };
 
-export { generateThumbnail, deleteThumbnail, getUserController };
+export { generateThumbnail, deleteThumbnail, getUserThumnail };
