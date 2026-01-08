@@ -200,4 +200,33 @@ const deleteThumbnail = async (req, res) => {
   }
 };
 
-export { generateThumbnail, deleteThumbnail };
+const getUserController = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ success: false, message: "User not found." });
+    }
+
+    const thumbnails = await Thumbnail.find({ user: userId }).sort({ createdAt: -1 });
+    if (!thumbnails) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Thumbnails not found." });
+    }
+
+    return res.status(200).json({
+      thumbnails,
+      success: true,
+      message: "Thumbnail fetched Successfully.",
+    });
+  } catch (error) {
+    console.log(error.message);
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch thumbnail." });
+  }
+};
+
+export { generateThumbnail, deleteThumbnail, getUserController };
