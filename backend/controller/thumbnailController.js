@@ -209,7 +209,9 @@ const getUserThumnail = async (req, res) => {
         .json({ success: false, message: "User not found." });
     }
 
-    const thumbnails = await Thumbnail.find({ user: userId }).sort({ createdAt: -1 });
+    const thumbnails = await Thumbnail.find({ user: userId }).sort({
+      createdAt: -1,
+    });
     if (!thumbnails) {
       return res
         .status(404)
@@ -229,4 +231,45 @@ const getUserThumnail = async (req, res) => {
   }
 };
 
-export { generateThumbnail, deleteThumbnail, getUserThumnail };
+const getSingleThumbnail = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { id } = req.params;
+
+    const thumbnail = await Thumbnail.findById(id);
+    if (!thumbnail) {
+      return res.status(404).json({
+        success: false,
+        message: "Thumbnail not found.",
+      });
+    }
+
+    if (thumbnail.user.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized access to this thumbnail.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Thumbnail fetch Successfully.",
+    });
+  } catch (error) {
+    console.log(error.message);
+    return res
+      .status(500)
+      .json({
+        thumbnail,
+        success: false,
+        message: "Failed to fetch thumbnail.",
+      });
+  }
+};
+
+export {
+  generateThumbnail,
+  deleteThumbnail,
+  getUserThumnail,
+  getSingleThumbnail,
+};
