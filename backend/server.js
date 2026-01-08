@@ -4,6 +4,7 @@ import cookieParser from "cookie-parser";
 import "dotenv/config";
 import connectDB from "./config/db.js";
 import userRouter from './routes/userRoute.js'
+import thumbnailRouter from './routes/thumbnailRoute.js'
 
 const app = express();
 connectDB();
@@ -20,6 +21,7 @@ app.use(
 );
 
 app.use("/api/user",userRouter);
+app.use("/api/thumbnail",thumbnailRouter);
 
 app.get("/", (req, res) => {
   res.send("Hello World");
