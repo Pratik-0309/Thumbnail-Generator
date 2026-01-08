@@ -162,4 +162,42 @@ const generateThumbnail = async (req, res) => {
   }
 };
 
-export { generateThumbnail };
+const deleteThumbnail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user._id;
+
+    const thumbnail = await Thumbnail.findById(id);
+    if (!thumbnail) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Thumbnail not found" });
+    }
+
+    if (thumbnail.user.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized to delete this thumbnail",
+      });
+    }
+
+    if (thumbnail.image_url) {
+      const publicId = thumbnail.image_url.split("/").pop().split(".")[0];
+      await cloudinary.uploader.destroy(publicId);
+    }
+
+    await Thumbnail.findByIdAndDelete(id);
+
+    return res.status(200).json({
+      success: true,
+      message: "Thumbnail deleted successfully",
+    });
+  } catch (error) {
+    console.log(error.message);
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to delete thumbnail." });
+  }
+};
+
+export { generateThumbnail, deleteThumbnail };
