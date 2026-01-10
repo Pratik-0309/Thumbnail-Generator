@@ -1,9 +1,9 @@
 import Thumbnail from "../models/ThumbnailModel.js";
-import { HarmCategory, HarmBlockThreshold } from "@google/genai";
-import geminiAI from "../config/gemini.js";
 import path from "path";
 import fs from "fs";
+import { createCanvas, loadImage } from "canvas";
 import { v2 as cloudinary } from "cloudinary";
+import axios from "axios";
 
 const stylePrompts = {
   "Bold & Graphic":
@@ -37,12 +37,14 @@ const colorSchemeDescriptions = {
 };
 
 const generateThumbnail = async (req, res) => {
+  let filePath = "";
+
   try {
-    const userId = req.user._id;
+    const userId = req.user?._id;
     if (!userId) {
       return res.status(401).json({
-        message: "User not found",
         success: false,
+        message: "Unauthorized user",
       });
     }
 
@@ -50,115 +52,171 @@ const generateThumbnail = async (req, res) => {
       title,
       prompt: user_prompt,
       style,
-      aspect_ratio,
+      aspect_ratio = "16:9",
       color_scheme,
-      text_overlay,
+      text_overlay = true,
     } = req.body;
+
+    if (!title || !style) {
+      return res.status(400).json({
+        success: false,
+        message: "Title and style are required",
+      });
+    }
+
+    let prompt = `
+Create a professional YouTube thumbnail background.
+Topic: "${title}"
+Style: ${stylePrompts?.[style] || style}.
+`;
+
+    if (color_scheme) {
+      prompt += `
+Color scheme: ${colorSchemeDescriptions?.[color_scheme] || color_scheme}.
+`;
+    }
+
+    if (user_prompt) {
+      prompt += `
+Additional details: ${user_prompt}.
+`;
+    }
+
+    prompt += `
+Do NOT include any text, letters, words, watermark, logo.
+Leave clean empty space for text overlay.
+Ultra sharp, cinematic lighting, high contrast.
+`;
+
+    const dims =
+      aspect_ratio === "16:9"
+        ? { w: 1280, h: 720 }
+        : aspect_ratio === "9:16"
+        ? { w: 720, h: 1280 }
+        : { w: 1024, h: 1024 };
+
+    const seed = Math.floor(Math.random() * 1000000);
+
+    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
+      prompt
+    )}?width=${dims.w}&height=${dims.h}&seed=${seed}&model=flux&nologo=true`;
+
+    const aiResponse = await axios.get(pollinationsUrl, {
+      responseType: "arraybuffer",
+    });
+
+    const buffer = Buffer.from(aiResponse.data, "binary");
+
+    if (!fs.existsSync("images")) fs.mkdirSync("images", { recursive: true });
+
+    const filename = `thumb-${Date.now()}.png`;
+    filePath = path.join("images", filename);
+    fs.writeFileSync(filePath, buffer);
+
+    if (text_overlay) {
+      const image = await loadImage(filePath);
+      const canvas = createCanvas(image.width, image.height);
+      const ctx = canvas.getContext("2d");
+
+      ctx.drawImage(image, 0, 0);
+
+      /* ---------- SAFE AREA ---------- */
+      const safeMarginX = image.width * 0.06;
+      const maxTextWidth = image.width - safeMarginX * 2;
+
+      /* ---------- TITLE SPLIT ---------- */
+      const words = title.toUpperCase().split(" ");
+      let lines = [];
+      let currentLine = "";
+
+      let fontSize = Math.floor(image.width * 0.075);
+      ctx.font = `bold ${fontSize}px sans-serif`;
+
+      for (let word of words) {
+        const testLine = currentLine + word + " ";
+        if (ctx.measureText(testLine).width > maxTextWidth) {
+          lines.push(currentLine.trim());
+          currentLine = word + " ";
+        } else {
+          currentLine = testLine;
+        }
+      }
+      if (currentLine) lines.push(currentLine.trim());
+
+      // Max 2 lines only (YouTube rule)
+      if (lines.length > 2) {
+        lines = [
+          lines[0],
+          lines.slice(1).join(" ").split(" ").slice(0, 3).join(" "),
+        ];
+      }
+
+      /* ---------- AUTO SCALE ---------- */
+      while (
+        Math.max(...lines.map((l) => ctx.measureText(l).width)) > maxTextWidth
+      ) {
+        fontSize -= 3;
+        ctx.font = `bold ${fontSize}px sans-serif`;
+      }
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      /* ---------- TEXT STYLE ---------- */
+      ctx.lineWidth = Math.max(4, fontSize * 0.12);
+      ctx.strokeStyle = "#000000";
+      ctx.fillStyle = "#ffffff";
+
+      /* ---------- POSITION ---------- */
+      const centerX = image.width / 2;
+      const centerY = image.height * 0.75;
+      const lineHeight = fontSize * 1.15;
+
+      lines.forEach((line, i) => {
+        const y = centerY + (i - (lines.length - 1) / 2) * lineHeight;
+
+        ctx.strokeText(line, centerX, y);
+        ctx.fillText(line, centerX, y);
+      });
+
+      fs.writeFileSync(filePath, canvas.toBuffer("image/png"));
+    }
+
+    const uploadResult = await cloudinary.uploader.upload(filePath, {
+      folder: "thumbnails",
+    });
+
+    fs.unlinkSync(filePath);
 
     const thumbnail = await Thumbnail.create({
       user: userId,
       title,
-      prompt_used: user_prompt,
+      image_url: uploadResult.secure_url,
+      prompt_used: prompt,
       user_prompt,
       style,
       aspect_ratio,
       color_scheme,
       text_overlay,
-      isGenerating: true,
+      isGenerating: false,
     });
-
-    const model = geminiAI.getGenerativeModel({ model: "imagen-3" });
-
-    const generationConfig = {
-      maxOutputTokens: 32878,
-      temperature: 1,
-      topP: 0.95,
-      responseModalities: ["IMAGE"],
-      imageConfig: {
-        aspectRatio: aspect_ratio || "16:9",
-        imageSize: "1K",
-      },
-      safetySettings: [
-        {
-          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-          threshold: HarmBlockThreshold.OFF,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-          threshold: HarmBlockThreshold.OFF,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-          threshold: HarmBlockThreshold.OFF,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-          threshold: HarmBlockThreshold.OFF,
-        },
-      ],
-    };
-
-    let prompt = `create a ${stylePrompts[style]} for : ${title}`;
-
-    if (color_scheme) {
-      prompt += `Use a ${colorSchemeDescriptions[color_scheme]} color scheme.`;
-    }
-
-    if (user_prompt) {
-      prompt += `Additional details: ${user_prompt}`;
-    }
-
-    prompt += `The thumbnail should be ${aspect_ratio}, visually stunnig, and designed to maximize click-through rate.
-    Make it bold, professional, and impossible to ignore.`;
-
-    const response = await geminiAI.models.generateContent({
-      model,
-      contents: [prompt],
-      config: generationConfig,
-    });
-
-    if (!response?.candidates?.[0]?.content?.parts) {
-      throw new error("Unexpected response");
-    }
-
-    const parts = response.candidates[0].content.parts;
-
-    let finalBuffer;
-    for (const part of parts) {
-      if (part.inlineData) {
-        finalBuffer = Buffer.from(part.inlineData.data, "base64");
-      }
-    }
-
-    const filename = `final-output-${Date.now()}.png`;
-    const filePath = path.join("images", filename);
-
-    // create image directory if not exist
-    fs.mkdirSync("images", { recursive: true });
-
-    // Write final image to file
-    fs.writeFileSync(filePath, finalBuffer);
-
-    const uploadResult = await cloudinary.uploader.upload(filePath, {
-      resource_type: "image",
-    });
-
-    thumbnail.image_url = uploadResult;
-    thumbnail.isGenerating = false;
-    await thumbnail.save();
 
     return res.status(200).json({
-      thumbnail,
       success: true,
-      message: "Thumbnail Generated Successfully.",
+      message: "Thumbnail generated successfully",
+      thumbnail,
     });
-
-    fs.unlinkSync(filePath);
   } catch (error) {
-    console.log(error.message);
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to generate thumbnail." });
+    console.error("Thumbnail generation error:", error);
+
+    if (filePath && fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to generate thumbnail",
+    });
   }
 };
 
@@ -257,13 +315,11 @@ const getSingleThumbnail = async (req, res) => {
     });
   } catch (error) {
     console.log(error.message);
-    return res
-      .status(500)
-      .json({
-        thumbnail,
-        success: false,
-        message: "Failed to fetch thumbnail.",
-      });
+    return res.status(500).json({
+      thumbnail,
+      success: false,
+      message: "Failed to fetch thumbnail.",
+    });
   }
 };
 
