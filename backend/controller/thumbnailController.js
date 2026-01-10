@@ -308,15 +308,15 @@ const getSingleThumbnail = async (req, res) => {
         message: "Unauthorized access to this thumbnail.",
       });
     }
-
+    
     return res.status(200).json({
+      thumbnail: thumbnail,
       success: true,
       message: "Thumbnail fetch Successfully.",
     });
   } catch (error) {
     console.log(error.message);
     return res.status(500).json({
-      thumbnail,
       success: false,
       message: "Failed to fetch thumbnail.",
     });
