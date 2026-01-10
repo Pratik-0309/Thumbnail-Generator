@@ -195,4 +195,30 @@ const userLogout = async (req, res) => {
   }
 };
 
-export { userLogin, userLogout, userRegister, refreshAccessToken };
+const getUserDetails = async(req,res) => {
+  try {
+    const userId = req.user._id;
+    if(!userId){
+      return res.status(403).json({
+        message: "User Not found",
+        success: true
+      })
+    }
+
+    const user = await User.findById(userId);
+     
+    return res.status(200).json({
+      success: true,
+      message: "User fetched Successfully",
+      user,
+    })
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      message: "failed to fetch user detail.",
+      success: false,
+    })
+  }
+}
+
+export { userLogin, userLogout, userRegister, refreshAccessToken,getUserDetails };
