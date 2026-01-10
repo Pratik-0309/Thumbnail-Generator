@@ -170,6 +170,7 @@ const userLogin = async (req, res) => {
       .cookie("accessToken", accessToken, cookieOptions)
       .cookie("refreshToken", refreshToken, cookieOptions)
       .json({
+        message: "Welcome back!",
         user: loggedInUser,
       });
   } catch (error) {
